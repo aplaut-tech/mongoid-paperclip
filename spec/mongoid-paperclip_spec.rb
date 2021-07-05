@@ -1,11 +1,14 @@
-require 'spec_helper'
+require "spec_helper"
 
 RSpec.describe Mongoid::Paperclip, type: :unit do
+  def read_image_fixture
+    File.new("spec/support/avatar.png", "rb")
+  end
+
   describe "avatar" do
     let(:user) { User.create }
-
     before do
-      user.update avatar: File.new('spec/support/avatar.png', 'rb')
+      user.update avatar: read_image_fixture
     end
 
     it "stores file_name" do
@@ -33,7 +36,7 @@ RSpec.describe Mongoid::Paperclip, type: :unit do
     let(:user) { MultipleAttachments.create }
 
     it "works" do
-      user.update avatar: File.new('spec/support/avatar.png', 'rb'), icon: File.new('spec/support/avatar.png', 'rb')
+      user.update avatar: read_image_fixture, icon: read_image_fixture
       expect(user.avatar_file_name).to eq("avatar.png")
       expect(user.icon_file_name).to eq("avatar.png")
     end
@@ -43,11 +46,31 @@ RSpec.describe Mongoid::Paperclip, type: :unit do
     let(:user) { NoFingerprint.create }
 
     before do
-      user.update avatar: File.new('spec/support/avatar.png', 'rb')
+      user.update avatar: read_image_fixture
     end
 
     it "does not store a fingerprint" do
-      expect(user.attributes).to_not include('fingerprint')
+      expect(user.attributes).to_not include("fingerprint")
     end
+  end
+
+  describe "embedded documents" do
+    let(:post) { Post.create }
+
+    specify do
+      post.photos.build(content: read_image_fixture)
+      post.save!
+      expect(post).to be_valid
+      expect { post.reload.photos.first.avatar_file_name }
+    end
+
+    specify {
+      post.photos.create!(content: read_image_fixture)
+      post.reload
+      expect(post.photos.count).to eq(1)
+      post.write_attributes(photos: [])
+      expect(post.save).to eq(true)
+      expect(post.photos.count).to eq(0)
+    }
   end
 end

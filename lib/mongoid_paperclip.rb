@@ -1,4 +1,4 @@
-require 'paperclip'
+require "paperclip"
 
 ##
 # the id of mongoid is not integer, correct the id_partitioin.
@@ -8,11 +8,8 @@ Paperclip.interpolates :id_partition do |attachment, style|
     ("%09d".freeze % id).scan(/\d{3}/).join("/".freeze)
   when String
     id.scan(/.{4}/).join("/".freeze)
-  else
-    nil
   end
 end
-
 ##
 # mongoid criteria uses a different syntax.
 module Paperclip
@@ -21,6 +18,28 @@ module Paperclip
       class_for(klass).unscoped.where("#{name}_file_name".to_sym.ne => nil).each do |instance|
         yield(instance)
       end
+    end
+  end
+
+  class Attachment
+    def queue_all_for_delete #:nodoc:
+      return unless file?
+
+      unless @options[:preserve_files]
+        @queued_for_delete += [:original, *styles.keys].uniq.map { |style|
+          path(style) if exists?(style)
+        }.compact
+      end
+
+      # Fix for embedded documents which have paperclip attachment
+      return if instance.frozen?
+
+      instance_write(:file_name, nil)
+      instance_write(:content_type, nil)
+      instance_write(:file_size, nil)
+      instance_write(:fingerprint, nil)
+      instance_write(:created_at, nil) if has_enabled_but_unset_created_at?
+      instance_write(:updated_at, nil)
     end
   end
 end
@@ -54,7 +73,6 @@ end
 #
 module Mongoid
   module Paperclip
-
     ##
     # Extends the model with the defined Class methods
     def self.included(base)
@@ -62,7 +80,6 @@ module Mongoid
     end
 
     module ClassMethods
-
       ##
       # Adds after_commit
       def after_commit(*args, &block)
@@ -93,7 +110,7 @@ module Mongoid
 
         ##
         # Include Paperclip and Paperclip::Glue for compatibility
-        unless self.ancestors.include?(::Paperclip)
+        unless ancestors.include?(::Paperclip)
           include ::Paperclip
           include ::Paperclip::Glue
         end
@@ -105,20 +122,19 @@ module Mongoid
 
         ##
         # Define the necessary collection fields in Mongoid for Paperclip
-        field(:"#{field}_file_name",    :type => String)
-        field(:"#{field}_content_type", :type => String)
-        field(:"#{field}_file_size",    :type => Integer)
-        field(:"#{field}_updated_at",   :type => DateTime)
-        field(:"#{field}_fingerprint",  :type => String) unless disable_fingerprint
+        field(:"#{field}_file_name", type: String)
+        field(:"#{field}_content_type", type: String)
+        field(:"#{field}_file_size", type: Integer)
+        field(:"#{field}_updated_at", type: DateTime)
+        field(:"#{field}_fingerprint", type: String) unless disable_fingerprint
       end
 
       ##
       # This method is deprecated
       def has_attached_file(field, options = {})
         raise "Mongoid::Paperclip#has_attached_file is deprecated, " +
-              "Use 'has_mongoid_attached_file' instead"
+          "Use 'has_mongoid_attached_file' instead"
       end
     end
-
   end
 end
